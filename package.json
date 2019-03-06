@@ -2,10 +2,12 @@
   "name": "slothy-loader",
   "version": "1.0.0",
   "author": "Josh Williams <contact@joshwilliams.com>",
-  "contributors": [{
+  "contributors": [
+    {
       "name": "Cedric Sam",
       "email": "cedricsam@gmail.com"
-  }],
+    }
+  ],
   "description": "A responsive-aware plugin to smartly lazy load images and trigger callbacks.",
   "repository": {
     "type": "git",
