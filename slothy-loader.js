@@ -1,8 +1,9 @@
 /**
-* @preserve SlothyLoader - v1.0.0 - 2017-02-21
+* @preserve SlothyLoader - v2.0.0 - 2019-03-06
 * @preserve LaziestLoader - v0.7.3 - 2016-01-03
 * An lazy loader based on Josh Williams’s
 * LaziestLoader, but without jQuery dependency
+* v2.0, now with IntersectionObserver
 * See: http://sjwilliams.github.io/laziestloader/
 * Copyright (c) 2016 Josh Williams; Licensed MIT
 */
@@ -15,29 +16,39 @@ var slothyLoader = function(options, callback) {
     $loaded = [], // elements with the correct source set
     retina = window.devicePixelRatio > 1,
     retina3x = window.devicePixelRatio > 2,
-    didScroll = false;
+    didScroll = false,
+    observers = [];
 
   var defaultOptions = {
     selector: '.dvz-lazy',
     threshold: 0,
     sizePattern: /{{SIZE}}/ig,
     getSource: getSource,
-    event: 'scroll',
-    scrollThrottle: 250, // time in ms to throttle scroll. Increase for better performance.
+    event: 'scroll', // DEPRECATED
+    scrollThrottle: 250, // DEPRECATED // time in ms to throttle scroll. Increase for better performance.
     sizeOffsetPercent: 0, // Subtract this % of width from the containing element, and fit images as though the element were that size. 0 = fit to element size; 40 = size - 40%; -30 = size + 30%
     setSourceMode: true // plugin sets source attribute of the element. Set to false if you would like to, instead, use the callback to completely manage the element on trigger.
   }
 
+  const intersectionObserverOpts = { root: null, threshold: [0, 0.25, 0.5, 0.75], rootMargin: (typeof options !== 'undefined' && typeof options.threshold !== 'undefined' ? options.threshold : defaultOptions.threshold) + 'px' };
+
   if (typeof options === 'undefined') options = {}
   for (var x in defaultOptions) {
-      if (typeof defaultOptions[x] !== 'undefined' && typeof options[x] == 'undefined') {
-          options[x] = defaultOptions[x]
-      }
+    if (typeof defaultOptions[x] !== 'undefined' && typeof options[x] == 'undefined') {
+      options[x] = defaultOptions[x]
+    }
   }
 
   $elements = document.querySelectorAll(options["selector"])
 
-  var useNativeScroll = (typeof options.event === 'string') && (options.event.indexOf('scroll') === 0);
+  var useNativeScroll = (typeof options.event === 'string') && (options.event.indexOf('scroll') === 0); // Only concerns legacy way
+
+  function supportsIntersectionObserver() {
+    if (typeof window !== 'undefined') {
+      return 'IntersectionObserver' in window && 'IntersectionObserverEntry' in window
+    }
+    return false;
+  }
 
   /**
    * Generate source path of image to load. Take into account
@@ -96,7 +107,10 @@ var slothyLoader = function(options, callback) {
 
         source = source.replace(options.sizePattern, slug);
       } else {
-        source = source.replace(options.sizePattern, bestFit($el.offsetWidth, parsedWidths));
+        var bestFitWidth = bestFit($el.offsetWidth, parsedWidths)
+        if (retina3x) bestFitWidth *= 3
+        else if (retina) bestFitWidth *= 2
+        source = source.replace(options.sizePattern, bestFitWidth)
       }
     } else {
       source = retina3x ? data.srcRetina3x : retina ? data.srcRetina : data.src;
@@ -123,47 +137,84 @@ var slothyLoader = function(options, callback) {
   }
 
   /**
+   * Handler that sets up and loads image
+   *
+   * @param {Element} $el
+   */
+
+  function slHandler($el) {
+    var source;
+    // set height?
+    if ($el.dataset.ratio) {
+      setHeight.call($el);
+    }
+
+    // set content. default: set element source
+    if (options.setSourceMode) {
+      source = options.getSource($el);
+      if (source && $el.getAttribute('src') !== source) {
+        $el.setAttribute('src', source);
+      }
+    }
+
+    // applied immediately to reflect that media has started but,
+    // perhaps, hasn't finished downloading.
+    addClass($el, 'll-loadstarted');
+
+    // Determine when to fire `loaded` event. Wait until
+    // media is truly loaded if possible, otherwise immediately.
+    if (options.setSourceMode && ($el.nodeName === 'IMG' || $el.nodeName === 'VIDEO' || $el.nodeName === 'AUDIO') ) {
+      if ($el.nodeName === 'IMG') {
+        $el.onload = function() {
+          onLoad($el);
+        };
+      } else {
+        $el.onloadstart = function() {
+          onLoad($el);
+        };
+      }
+    } else {
+      onLoad($el);
+    }
+  }
+
+  /**
+   * Handler for Intersection Observer
+   *
+   * @param  {IntersectionObserverEntry[]} $entries
+   */
+
+  function slHandleIntersection(entries) {
+    var entry = entries[0];
+    var $el = entry.target;
+
+    if (entry.intersectionRatio > 0 || entry.intersectionRatio <= 0 && (entry.boundingClientRect.top < 0 || entry.boundingClientRect.y < 0)) {
+      slHandler($el);
+    }
+  }
+
+  /**
    * Event listener
    *
    * @param  {Event} $e
    */
 
-  function slEvListener (e) {
-      var $el = this;
-      var source;
+  function slLegacyEvListener(e) { // Used on scroll
+    var $el = this;
+    slHandler($el);
+  }
 
-      // set height?
-      if ($el.dataset.ratio) {
-        setHeight.call(this);
-      }
+  /**
+   * Attach observer on each matching element
+   */
 
-      // set content. default: set element source
-      if (options.setSourceMode) {
-        source = options.getSource($el);
-        if (source && this.getAttribute('src') !== source) {
-          this.setAttribute('src', source);
-        }
-      }
-
-      // applied immediately to reflect that media has started but,
-      // perhaps, hasn't finished downloading.
-      addClass($el, 'll-loadstarted');
-
-      // Determine when to fire `loaded` event. Wait until
-      // media is truly loaded if possible, otherwise immediately.
-      if (options.setSourceMode && (this.nodeName === 'IMG' || this.nodeName === 'VIDEO' || this.nodeName === 'AUDIO') ) {
-        if (this.nodeName === 'IMG') {
-          this.onload = function() {
-            onLoad($el);
-          };
-        } else {
-          this.onloadstart = function() {
-            onLoad($el);
-          };
-        }
-      } else {
-        onLoad($el);
-      }
+  function bindObservers() {
+    for (var i = 0; i < $elements.length; ++i) {
+      var el = $elements[i];
+      var observer = new IntersectionObserver(slHandleIntersection, intersectionObserverOpts);
+      observer.observe(el);
+      observers.push(observer);
+    }
   }
 
   /**
@@ -173,10 +224,10 @@ var slothyLoader = function(options, callback) {
    * exclusively.
    */
 
-  function bindLoader() {
+  function bindLegacyLoader() {
     for (var i = 0; i < $elements.length; ++i) {
       var el = $elements[i];
-      el.addEventListener('slothyloader', slEvListener)
+      el.addEventListener('slothyloader', slLegacyEvListener)
     }
   }
 
@@ -184,10 +235,10 @@ var slothyLoader = function(options, callback) {
    * Remove event handler from elements
    */
 
-  function unbindLoader() {
+  function unbindLegacyLoader() {
     for (var i = 0; i < $elements.length; ++i) {
       var el = $elements[i];
-      el.removeEventListener('slothyloader', slEvListener);
+      el.removeEventListener('slothyloader', slLegacyEvListener);
     }
   }
 
@@ -278,124 +329,125 @@ var slothyLoader = function(options, callback) {
 
   // initial binding
 
-  bindLoader();
-
-  // Watch either native scroll events, throttled by
-  // options.scrollThrottle, or a custom event that
-  // implements its own throttling.
-
-  if (useNativeScroll) {
-    window.addEventListener("scroll", function(){
-      didScroll = true;
-    });
-
-    setInterval(function() {
-      if (didScroll) {
-        didScroll = false;
-        slothyloader();
-      }
-    }, options.scrollThrottle);
-
+  if (supportsIntersectionObserver()) {
+    bindObservers();
   } else {
+    bindLegacyLoader();
 
-    if (typeof options.event === 'function') {
-      options.event(slothyloader);
-    } else {
-      window.addEventListener(options.event, function(){
-        slothyloader();
+    // Watch either native scroll events, throttled by
+    // options.scrollThrottle, or a custom event that
+    // implements its own throttling.
+
+    if (useNativeScroll) {
+      window.addEventListener("scroll", function(){
+        didScroll = true;
       });
-    }
 
+      setInterval(function() {
+        if (didScroll) {
+          didScroll = false;
+          slothyloader();
+        }
+      }, options.scrollThrottle);
+    } else {
+      if (typeof options.event === 'function') {
+        options.event(slothyloader);
+      } else {
+        window.addEventListener(options.event, function(){
+          slothyloader();
+        });
+      }
+    }
   }
 
   // Helpful native HTML functions for class manipulation to replace jQuery equivalents
 
   function hasClass(el, className) {
-      var classList = className.split(" ")
-      for (var i=0; i<classList.length; i++) {
-          var className = classList[i]
-          if (typeof el.classList !== 'undefined')
-              return el.classList.contains(className)
-          else
-              return !!el.className.match(new RegExp('(\\s|^)' + className + '(\\s|$)'))
-      }
+    var classList = className.split(" ")
+    for (var i=0; i<classList.length; i++) {
+      var className = classList[i]
+      if (typeof el.classList !== 'undefined')
+        return el.classList.contains(className)
+      else
+        return !!el.className.match(new RegExp('(\\s|^)' + className + '(\\s|$)'))
+    }
   }
 
   function addClass(el, className) {
-      var classList = className.split(" ")
-      for (var i=0; i<classList.length; i++) {
-          var className = classList[i]
-          if (typeof el.classList !== 'undefined') {
-             el.classList.add(className)
-          } else {
-             if (!hasClass(el, className)) el.className += " " + className
-          }
+    var classList = className.split(" ")
+    for (var i=0; i<classList.length; i++) {
+      var className = classList[i]
+      if (typeof el.classList !== 'undefined') {
+        el.classList.add(className)
+      } else {
+        if (!hasClass(el, className)) el.className += " " + className
       }
+    }
   }
 
   function removeClass(el, className) {
-      var classList = className.split(" ")
-      for (var i=0; i<classList.length; i++) {
-          var className = classList[i]
-          if (typeof el.classList !== 'undefined')
-              el.classList.remove(className)
-          else if (hasClass(el, className)) {
-              var reg = new RegExp('(\\s|^)' + className + '(\\s|$)')
-              el.className=el.className.replace(reg, ' ')
-          }
+    var classList = className.split(" ")
+    for (var i=0; i<classList.length; i++) {
+      var className = classList[i]
+      if (typeof el.classList !== 'undefined')
+        el.classList.remove(className)
+      else if (hasClass(el, className)) {
+        var reg = new RegExp('(\\s|^)' + className + '(\\s|$)')
+        el.className=el.className.replace(reg, ' ')
       }
+    }
   }
 
   // https://tc39.github.io/ecma262/#sec-array.prototype.includes
   function includesElement(nodeList, searchElement, fromIndex) {
 
-      // 1. Let O be ? ToObject(this value).
-      if (nodeList == null) {
-        throw new TypeError('"nodeList" is null or not defined');
-      }
+    // 1. Let O be ? ToObject(this value).
+    if (nodeList == null) {
+      throw new TypeError('"nodeList" is null or not defined');
+    }
 
-      var o = Object(nodeList);
+    var o = Object(nodeList);
 
-      // 2. Let len be ? ToLength(? Get(O, "length")).
-      var len = o.length >>> 0;
+    // 2. Let len be ? ToLength(? Get(O, "length")).
+    var len = o.length >>> 0;
 
-      // 3. If len is 0, return false.
-      if (len === 0) {
-        return false;
-      }
-
-      // 4. Let n be ? ToInteger(fromIndex).
-      //    (If fromIndex is undefined, this step produces the value 0.)
-      var n = fromIndex | 0;
-
-      // 5. If n ≥ 0, then
-      //  a. Let k be n.
-      // 6. Else n < 0,
-      //  a. Let k be len + n.
-      //  b. If k < 0, let k be 0.
-      var k = Math.max(n >= 0 ? n : len - Math.abs(n), 0);
-
-      // 7. Repeat, while k < len
-      while (k < len) {
-        // a. Let elementK be the result of ? Get(O, ! ToString(k)).
-        // b. If SameValueZero(searchElement, elementK) is true, return true.
-        // c. Increase k by 1.
-        // NOTE: === provides the correct "SameValueZero" comparison needed here.
-        if (o[k] === searchElement) {
-          return true;
-        }
-        k++;
-      }
-
-      // 8. Return false
+    // 3. If len is 0, return false.
+    if (len === 0) {
       return false;
+    }
+
+    // 4. Let n be ? ToInteger(fromIndex).
+    //    (If fromIndex is undefined, this step produces the value 0.)
+    var n = fromIndex | 0;
+
+    // 5. If n ≥ 0, then
+    //  a. Let k be n.
+    // 6. Else n < 0,
+    //  a. Let k be len + n.
+    //  b. If k < 0, let k be 0.
+    var k = Math.max(n >= 0 ? n : len - Math.abs(n), 0);
+
+    // 7. Repeat, while k < len
+    while (k < len) {
+      // a. Let elementK be the result of ? Get(O, ! ToString(k)).
+      // b. If SameValueZero(searchElement, elementK) is true, return true.
+      // c. Increase k by 1.
+      // NOTE: === provides the correct "SameValueZero" comparison needed here.
+      if (o[k] === searchElement) {
+        return true;
+      }
+      k++;
+    }
+
+    // 8. Return false
+    return false;
   }
 
   // reset state on resize
   window.addEventListener('resize', function() {
     $loaded = [];
-    unbindLoader();
-    bindLoader();
+    unbindLegacyLoader();
+    bindLegacyLoader();
     slothyloader();
   });
 

@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <meta name="viewport" content="width=device-width">
-    <title>SlothyLoader, a responsive and retina-aware lazy loader sans jQuery</title>
+    <title>SlothyLoader, a responsive and retina-aware lazy loader sans jQuery (with Intersection Observer)</title>
 </head>
 
 <style>
@@ -283,10 +283,10 @@ li .code {
     </section>
 
     <section class="installation">
-        <h2>Try SlothyLoader v1.0.0</h2>
+        <h2>Try SlothyLoader v2.0.0</h2>
         <ol>
-            <li><a href="https://raw.githubusercontent.com/bizweekgraphics/slothy-loader/v1.0.0/slothy-loader.js">Development Version</a></li>
-            <li><a href="https://raw.githubusercontent.com/bizweekgraphics/slothy-loader/v1.0.0/slothy-loader.min.js">Production Version</a></li>
+            <li><a href="https://raw.githubusercontent.com/bizweekgraphics/slothy-loader/v2.0.0/slothy-loader.js">Development Version</a></li>
+            <li><a href="https://raw.githubusercontent.com/bizweekgraphics/slothy-loader/v2.0.0/slothy-loader.min.js">Production Version</a></li>
         </ol>
     </section>
 
@@ -663,6 +663,10 @@ for (var i = 0; i &lt; $elements.length; ++i) {
 
     <section id="releasehistory">
         <h2>Release History</h2>
+        <h4>2.0.0</h4>
+        <ul>
+            <li>IntersectionObserver support</li>
+        </ul>
         <h4>1.0.0</h4>
         <ul>
             <li>First release, forked from <a href="http://sjwilliams.github.io/laziestloader/#releasehistory">LaziestLoader</a></li>
@@ -673,6 +677,7 @@ for (var i = 0; i &lt; $elements.length; ++i) {
     <section>
         <h2>Credits</h2>
         <p>SlothyLoader is a lazy loader sans jQuery, forked from <a href="https://github.com/sjwilliams/laziestloader">LaziestLoader</a> by <a href="http://joshwilliams.com">Josh Williams</a> at release <a href="https://github.com/sjwilliams/laziestloader/tree/v0.7.3">0.7.3 (2016-01-03)</a>. He said he was inspired by Luís Almeida's <a href="http://luis-almeida.github.com/unveil/">unveil</a></p>
+        <p>As of March 6, 2019, the <a href="https://developer.mozilla.org/en-US/docs/Web/API/Intersection_Observer_API">Intersection Observer API</a> is used to detect when an element enters the viewport, when available. If unavailable, the trigger happens via event listeners and checking the viewport, as with the previous versions. Usage API stays the same.</p>
     </section>
 
     <section>
