@@ -107,10 +107,14 @@ var slothyLoader = function(options, callback) {
 
         source = source.replace(options.sizePattern, slug);
       } else {
-        var bestFitWidth = bestFit($el.offsetWidth, parsedWidths)
-        if (retina3x) bestFitWidth *= 3
-        else if (retina) bestFitWidth *= 2
-        source = source.replace(options.sizePattern, bestFitWidth)
+        if (data.patternRetina || data.patternRetina3x) {
+          source = source.replace(options.sizePattern, bestFit($el.offsetWidth, parsedWidths))
+        } else {
+          var bestFitWidth = bestFit($el.offsetWidth, parsedWidths)
+          if (retina3x) bestFitWidth *= 3
+          else if (retina) bestFitWidth *= 2
+          source = source.replace(options.sizePattern, bestFitWidth)
+        }
       }
     } else {
       source = retina3x ? data.srcRetina3x : retina ? data.srcRetina : data.src;
